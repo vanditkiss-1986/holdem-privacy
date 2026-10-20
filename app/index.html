@@ -1,0 +1,869 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="포지션별 오픈 퀴즈, 플랍 이후 퀴즈, 승률 계산과 내 성향 분석으로 홀덤 실력을 키우는 연습장">
+<style>body{margin:0;font-size:14px}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>홀덤 연습장</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: one narrow column like a dealer's tray — segmented tabs on top, one tool at a time below */
+:root{
+  --bg:#EDF1EE; --surface:#FFFFFF; --ink:#15201A; --muted:#5C6B62; --line:#D3DCD6;
+  --felt:#1F5C46; --felt-soft:#DCEBE3; --chip:#C8372D; --chip-soft:#F6DEDB; --raise:#1F7A52; --gold:#B7862B;
+  --display:"Black Han Sans","Noto Sans KR",system-ui,sans-serif;
+  --body:"Noto Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0F1613; --surface:#17211C; --ink:#E6EDE8; --muted:#93A39A; --line:#2A3730;
+  --felt:#4FB38A; --felt-soft:#1C3B2E; --chip:#F06A5E; --chip-soft:#3E211E; --raise:#3E9E74; --gold:#D9AE55; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1613; --surface:#17211C; --ink:#E6EDE8; --muted:#93A39A; --line:#2A3730;
+  --felt:#4FB38A; --felt-soft:#1C3B2E; --chip:#F06A5E; --chip-soft:#3E211E; --raise:#3E9E74; --gold:#D9AE55; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.6;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+.wrap{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+header h1{font-family:var(--display);font-weight:400;font-size:34px;line-height:1.1;margin:0;letter-spacing:.01em;text-wrap:balance}
+header h1 span{color:var(--felt)}
+header p{margin:6px 0 0;color:var(--muted)}
+.tabs{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px}
+.tabs button{font:inherit;font-size:14px;font-weight:500;border:0;background:transparent;color:var(--muted);padding:9px 4px;border-radius:9px;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--felt);color:var(--bg);font-weight:700}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:16px}
+h2{margin:0;font-size:18px;font-weight:700}
+.hint{margin:0;color:var(--muted);font-size:14px;max-width:62ch}
+.label{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.btn{font:inherit;font-weight:700;border-radius:10px;padding:12px 18px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.btn.raise{background:var(--raise);border-color:var(--raise);color:#fff}
+.btn.fold{background:var(--chip);border-color:var(--chip);color:#fff}
+.btn.primary{background:var(--felt);border-color:var(--felt);color:var(--bg)}
+.btn:disabled{opacity:.4;cursor:default}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* playing cards */
+.pc{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;width:58px;height:80px;border-radius:8px;background:#FBFCFB;border:1px solid #C9D2CC;color:#111;font-family:var(--mono);font-weight:700;line-height:1;box-shadow:0 2px 6px rgb(0 0 0 / .12)}
+.pc b{font-size:24px}.pc i{font-style:normal;font-size:22px;margin-top:4px}
+.pc.red{color:#C8372D}
+.pc.sm{width:40px;height:54px}.pc.sm b{font-size:16px}.pc.sm i{font-size:15px;margin-top:2px}
+
+/* quiz */
+.table{background:var(--felt-soft);border-radius:12px;padding:18px;display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center}
+.pos{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pos strong{font-family:var(--display);font-weight:400;font-size:30px;color:var(--felt);line-height:1}
+.pos span{font-size:13px;color:var(--muted)}
+.cards{display:flex;gap:8px}
+.answer{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.answer .btn{padding:16px;font-size:17px}
+.fb{border-radius:10px;padding:12px 14px;font-weight:500}
+.fb.ok{background:var(--felt-soft);color:var(--ink)}
+.fb.no{background:var(--chip-soft);color:var(--ink)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.stat .v{font-family:var(--mono);font-size:22px;font-weight:700}
+.stat .k{font-size:12px;color:var(--muted)}
+
+/* range grid */
+.gridwrap{overflow-x:auto}
+.grid{display:grid;grid-template-columns:repeat(13,minmax(24px,1fr));gap:2px;min-width:330px}
+.cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;font-weight:500;border-radius:3px;background:var(--bg);color:var(--muted)}
+.cell.in{background:var(--raise);color:#fff}
+.cell.pair{font-weight:700}
+.cell.hl{outline:3px solid var(--gold);outline-offset:-1px;position:relative;z-index:1}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{font:inherit;font-weight:700;font-size:14px;padding:7px 14px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--felt);border-color:var(--felt);color:var(--bg)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px;margin-right:6px}
+
+/* pot odds */
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:13px;color:var(--muted);font-weight:500}
+.field input,.field select{font:inherit;font-family:var(--mono);font-size:17px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--ink);width:100%}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{font:inherit;font-size:13px;padding:6px 10px;border-radius:8px;border:1px dashed var(--line);background:transparent;color:var(--ink);cursor:pointer}
+.chips button b{font-family:var(--mono);color:var(--felt);margin-left:4px}
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.meter{border:1px solid var(--line);border-radius:10px;padding:12px}
+.meter .v{font-family:var(--mono);font-size:28px;font-weight:700}
+.meter .k{font-size:13px;color:var(--muted)}
+.verdict{border-radius:10px;padding:14px;font-weight:700;font-size:16px}
+.verdict.call{background:var(--felt-soft)}
+.verdict.fold{background:var(--chip-soft)}
+.verdict small{display:block;font-weight:400;font-size:13px;color:var(--muted);margin-top:4px}
+
+/* equity */
+.slots{display:grid;grid-template-columns:auto 1fr;gap:10px 14px;align-items:center}
+.slotrow{display:flex;gap:6px;flex-wrap:wrap}
+.slot{width:40px;height:54px;border-radius:8px;border:2px dashed var(--line);background:transparent;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.slot.active{border-color:var(--gold);border-style:solid}
+.slot .pc{box-shadow:none}
+.deck{display:grid;grid-template-columns:repeat(13,minmax(0,1fr));gap:3px}
+.dk{font:inherit;font-family:var(--mono);font-weight:700;font-size:12px;padding:6px 0;border-radius:5px;border:1px solid var(--line);background:#FBFCFB;color:#111;cursor:pointer;line-height:1.1}
+.dk.red{color:#C8372D}
+.dk:disabled{opacity:.18;cursor:default}
+.bar{display:flex;height:30px;border-radius:8px;overflow:hidden;font-family:var(--mono);font-size:12px;font-weight:700;color:#fff}
+.bar div{display:flex;align-items:center;justify-content:center;min-width:0;overflow:hidden;white-space:nowrap}
+.res{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+/* postflop */
+.spot{display:flex;flex-direction:column;gap:12px;background:var(--felt-soft);border-radius:12px;padding:16px}
+.spot .meta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.spot .meta b{color:var(--ink);font-weight:700}
+.hands{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end}
+.hands > div{display:flex;flex-direction:column;gap:6px}
+.seats{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:14px}
+.seats .vs{color:var(--muted);font-size:13px}
+.potv{font-size:20px;line-height:1.2}
+.who{display:inline-block;font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.who.me{background:var(--felt);color:var(--bg)}
+.who.op{background:var(--chip-soft);color:var(--chip);border:1px solid var(--chip)}
+.note{font-size:13px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+ol.line{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:0;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+ol.line li{display:grid;grid-template-columns:64px auto 1fr;gap:10px;align-items:center;padding:8px 12px;border-top:1px solid var(--line);font-size:14px}
+ol.line li:first-child{border-top:0}
+ol.line li.newst{border-top:2px solid var(--line)}
+ol.line .st{font-size:12px;color:var(--muted);font-weight:700}
+ol.line li.op .txt{color:var(--ink)}
+ol.line li.me .txt{font-weight:500}
+ol.line li.now{background:var(--felt-soft);font-weight:700}
+ol.line li.now .txt{color:var(--felt)}
+.opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.opts .btn{padding:14px 10px}
+.opts .btn.agg{border-color:var(--raise);color:var(--raise)}
+.opts .btn.fld{border-color:var(--chip);color:var(--chip)}
+.opts .btn.right{background:var(--raise);border-color:var(--raise);color:#fff}
+.opts .btn.wrong{background:var(--chip);border-color:var(--chip);color:#fff}
+.tag{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px;background:var(--surface);color:var(--felt);border:1px solid var(--line)}
+
+/* profile */
+.profile{border:1px solid var(--line);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:6px}
+.profile .name{font-family:var(--display);font-size:30px;line-height:1.15;color:var(--felt)}
+.profile p{margin:0;color:var(--muted);max-width:60ch}
+.axes{display:grid;gap:12px}
+.axis .lbls{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);font-weight:500}
+.axis .track{position:relative;height:10px;border-radius:999px;background:linear-gradient(90deg,var(--chip-soft),var(--felt-soft) 50%,var(--chip-soft))}
+.axis .dot{position:absolute;top:50%;width:18px;height:18px;border-radius:50%;background:var(--felt);border:3px solid var(--surface);transform:translate(-50%,-50%);box-shadow:0 0 0 1px var(--line)}
+.axis .mid{position:absolute;left:50%;top:-3px;bottom:-3px;width:2px;background:var(--line)}
+.sec{display:flex;flex-direction:column;gap:10px}
+.sec h3{margin:0;font-size:16px}
+.tblwrap{overflow-x:auto}
+table.pt{border-collapse:collapse;width:100%;font-size:14px;min-width:360px}
+table.pt th,table.pt td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
+table.pt th{font-size:12px;color:var(--muted);font-weight:700}
+table.pt th:first-child,table.pt td:first-child{text-align:left}
+.pill{display:inline-block;font-size:12px;font-weight:700;padding:1px 8px;border-radius:999px}
+.pill.l{background:var(--chip-soft);color:var(--chip)}
+.pill.t{background:var(--felt-soft);color:var(--felt)}
+.pill.g{background:var(--bg);color:var(--muted)}
+ol.advice{margin:0;padding:0;list-style:none;counter-reset:a;display:flex;flex-direction:column;gap:10px}
+ol.advice li{counter-increment:a;display:grid;grid-template-columns:28px 1fr;gap:10px;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+ol.advice li::before{content:counter(a);font-family:var(--mono);font-weight:700;width:26px;height:26px;border-radius:50%;background:var(--felt);color:var(--bg);display:flex;align-items:center;justify-content:center;font-size:13px}
+ol.advice b{display:block;margin-bottom:2px}
+ol.advice p{margin:0;font-size:14px;color:var(--muted)}
+ol.advice p.do{color:var(--ink);margin-top:6px}
+.qprog{display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.qprog .row{justify-content:space-between;font-size:14px}
+.qprog.done .prog div{background:var(--gold)}
+.prog{height:6px;border-radius:999px;background:var(--bg);overflow:hidden}
+.prog div{height:100%;background:var(--felt)}
+.boardgrp{display:flex;gap:12px;flex-wrap:wrap}
+.boardgrp .grp{display:flex;flex-direction:column;gap:4px}
+.boardgrp .grp span{font-size:11px;font-weight:700;color:var(--muted)}
+.boardgrp .grp div{display:flex;gap:6px}
+.seg button:disabled{opacity:.3;cursor:default}
+.posinfo{margin:0;font-size:14px;border-left:3px solid var(--felt);padding:4px 10px;background:var(--felt-soft);border-radius:0 8px 8px 0}
+.streets{display:flex;flex-direction:column;gap:10px}
+.street{border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.street .hd{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.street .hd b{font-size:15px}
+.street .hd .mini{display:flex;gap:3px}
+.street .hd .eqv{font-family:var(--mono);font-size:20px;font-weight:700}
+.street .eqbar{height:8px;border-radius:999px;background:var(--chip-soft);overflow:hidden;position:relative}
+.street .eqbar .fairmk{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink);opacity:.6}
+.street .eqbar div{height:100%;background:var(--raise)}
+.street .info{font-size:13px;color:var(--muted)}
+.street .rec{font-size:17px;font-weight:700;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.street .why{margin:0;font-size:14px;color:var(--ink)}
+.street .face{margin:0;font-size:13px;color:var(--muted)}
+.pk{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px}
+.pk.a{background:var(--raise);color:#fff}
+.pk.p{background:var(--bg);color:var(--ink);border:1px solid var(--line)}
+.pk.f{background:var(--chip);color:#fff}
+.pc.xs{width:26px;height:34px;border-radius:5px;box-shadow:none}.pc.xs b{font-size:12px}.pc.xs i{font-size:11px;margin-top:1px}
+@media (max-width:560px){.tabs{grid-template-columns:repeat(3,1fr)}}
+@media (max-width:440px){.pc{width:48px;height:66px}.pc b{font-size:20px}.pc i{font-size:18px}.pos strong{font-size:26px}.dk{font-size:10px;padding:5px 0}}
+@media (prefers-reduced-motion:no-preference){.fb,.verdict{animation:pop .18s ease-out}@keyframes pop{from{transform:translateY(3px)}to{transform:none}}}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>홀덤 <span>연습장</span></h1>
+    <p>6인 테이블(6-max) 기준의 프리플랍 오픈 연습, 레인지 표, 팟 오즈와 승률 계산기</p>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="t-quiz" aria-selected="true" data-tab="quiz">오픈 퀴즈</button>
+    <button role="tab" id="t-post" aria-selected="false" data-tab="post">플랍 이후</button>
+    <button role="tab" id="t-me" aria-selected="false" data-tab="me">내 성향</button>
+    <button role="tab" id="t-range" aria-selected="false" data-tab="range">레인지 표</button>
+    <button role="tab" id="t-odds" aria-selected="false" data-tab="odds">팟 오즈</button>
+    <button role="tab" id="t-eq" aria-selected="false" data-tab="eq">승률·추천</button>
+  </nav>
+
+  <!-- QUIZ -->
+  <section class="panel" id="p-quiz">
+    <div>
+      <h2>이 핸드, 오픈 레이즈할까?</h2>
+      <p class="hint">앞사람이 모두 폴드했고 내 차례예요. 포지션과 핸드를 보고 레이즈 또는 폴드를 고르세요. 키보드 R / F, 다음은 Space.</p>
+    </div>
+    <div class="table">
+      <div class="pos"><strong id="q-pos">BTN</strong><span id="q-posdesc"></span></div>
+      <div class="cards" id="q-cards"></div>
+    </div>
+    <div class="answer" id="q-answer">
+      <button class="btn raise" id="q-raise">레이즈</button>
+      <button class="btn fold" id="q-fold">폴드</button>
+    </div>
+    <div id="q-result" hidden>
+      <div class="fb" id="q-fb"></div>
+      <div style="margin-top:14px" class="label" id="q-gridlabel"></div>
+      <div class="gridwrap" style="margin-top:8px"><div class="grid" id="q-grid"></div></div>
+      <div class="row" style="margin-top:14px"><button class="btn primary" id="q-next">다음 핸드</button></div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="v" id="s-acc">–</div><div class="k">정답률</div></div>
+      <div class="stat"><div class="v" id="s-streak">0</div><div class="k">연속 정답</div></div>
+      <div class="stat"><div class="v" id="s-best">0</div><div class="k">최고 연속</div></div>
+    </div>
+    <div class="qprog" id="q-prog"></div>
+  </section>
+
+  <!-- POSTFLOP -->
+  <section class="panel" id="p-post" hidden>
+    <div>
+      <h2>플랍 이후, 어떻게 할까?</h2>
+      <p class="hint">스택 100BB, 캐시게임 기준 상황이에요. 가장 좋은 액션을 고르면 이유를 설명해 드려요.</p>
+    </div>
+    <div class="row" style="justify-content:space-between"><span class="tag" id="pf-tag"></span><span class="hint mono" id="pf-prog"></span></div>
+    <div class="spot">
+      <div class="seats" id="pf-spot"></div>
+      <div class="hands">
+        <div><span class="label">내 핸드</span><div class="cards" id="pf-hero"></div></div>
+        <div><span class="label">보드</span><div class="cards" id="pf-board"></div></div>
+        <div><span class="label">이번 스트리트 시작 팟</span><b class="mono potv" id="pf-pot"></b></div>
+      </div>
+      <div class="note" id="pf-note" hidden></div>
+      <div><span class="label">진행 순서</span><ol class="line" id="pf-line"></ol></div>
+    </div>
+    <div class="opts" id="pf-opts"></div>
+    <div id="pf-result" hidden>
+      <div class="fb" id="pf-fb"></div>
+      <div class="row" style="margin-top:12px"><button class="btn primary" id="pf-next">다음 문제</button></div>
+    </div>
+    <div class="qprog" id="pf-qprog"></div>
+  </section>
+
+  <!-- PROFILE -->
+  <section class="panel" id="p-me" hidden>
+    <div>
+      <h2>내 성향 분석</h2>
+      <p class="hint">두 퀴즈에서 틀린 방향을 모아 플레이 스타일을 진단해요. 기록은 이 브라우저에만 저장돼요.</p>
+    </div>
+    <div id="me-body"></div>
+    <div class="row"><button class="btn" id="me-reset">기록 초기화</button><span class="hint" id="me-resetmsg"></span></div>
+  </section>
+
+  <!-- RANGE -->
+  <section class="panel" id="p-range" hidden>
+    <div>
+      <h2>포지션별 오픈 레인지</h2>
+      <p class="hint">오른쪽 위는 같은 무늬(s), 왼쪽 아래는 다른 무늬(o), 대각선은 페어예요. 뒤 포지션일수록 범위가 넓어지는 걸 비교해 보세요.</p>
+    </div>
+    <div class="seg" id="r-seg"></div>
+    <div class="legend"><span><i style="background:var(--raise)"></i>오픈 레이즈</span><span><i style="background:var(--bg);border:1px solid var(--line)"></i>폴드</span><span id="r-pct" class="mono"></span></div>
+    <div class="gridwrap"><div class="grid" id="r-grid"></div></div>
+    <p class="hint">이 표는 입문자용으로 단순화한 출발점이에요. 상대가 소극적이면 넓히고, 3벳이 잦으면 좁히세요.</p>
+  </section>
+
+  <!-- POT ODDS -->
+  <section class="panel" id="p-odds" hidden>
+    <div>
+      <h2>콜해도 될까? 팟 오즈 계산</h2>
+      <p class="hint">드로우를 들고 상대 베팅을 받았을 때, 내 완성 확률이 콜에 필요한 승률보다 높은지 비교해요.</p>
+    </div>
+    <div class="fields">
+      <div class="field"><label for="o-pot">현재 팟 (상대 베팅 포함)</label><input id="o-pot" type="number" min="0" inputmode="decimal" value="90"></div>
+      <div class="field"><label for="o-call">내가 콜할 금액</label><input id="o-call" type="number" min="0" inputmode="decimal" value="30"></div>
+      <div class="field"><label for="o-outs">아웃츠 (완성 카드 수)</label><input id="o-outs" type="number" min="0" max="20" inputmode="numeric" value="9"></div>
+      <div class="field"><label for="o-street">지금 스트리트</label>
+        <select id="o-street"><option value="flop">플랍 (2장 남음)</option><option value="turn">턴 (1장 남음)</option></select></div>
+    </div>
+    <div>
+      <div class="label" style="margin-bottom:6px">자주 쓰는 아웃츠</div>
+      <div class="chips" id="o-chips"></div>
+    </div>
+    <div class="compare">
+      <div class="meter"><div class="k">콜에 필요한 승률</div><div class="v" id="o-need">–</div><div class="k" id="o-ratio"></div></div>
+      <div class="meter"><div class="k" id="o-havelabel">내 완성 확률</div><div class="v" id="o-have">–</div><div class="k" id="o-rule"></div></div>
+    </div>
+    <div class="verdict" id="o-verdict"></div>
+  </section>
+
+  <!-- EQUITY -->
+  <section class="panel" id="p-eq" hidden>
+    <div>
+      <h2>내 핸드 승률과 추천 액션</h2>
+      <p class="hint">내 카드와 보드를 고르면, 상대 포지션을 여러 개 누르면 멀티웨이(3명 이상 팟)로 계산해요. 상대는 각자 자기 포지션에서 흔히 플레이하는 핸드 중 하나를 무작위로 든다고 봐요. 보드를 플랍·턴·리버까지 채울수록 스트리트별 추천 액션이 하나씩 늘어나요.</p>
+    </div>
+    <div class="slots">
+      <span class="label">내 핸드</span><div class="slotrow" id="e-hero"></div>
+      <span class="label">내 포지션</span><div class="seg" id="e-mypos"></div>
+      <span class="label">상대 포지션<br><small style="font-weight:500;letter-spacing:0;text-transform:none">여러 명 선택 가능</small></span><div class="seg" id="e-oppos"></div>
+      <span class="label">상대 핸드</span><div class="seg" id="e-rng"><button aria-pressed="true" data-r="pos">포지션 범위 안 랜덤</button><button aria-pressed="false" data-r="any">아무 두 장 랜덤</button></div>
+      <span class="label">보드</span><div class="boardgrp" id="e-board"></div>
+    </div>
+    <p class="posinfo" id="e-posinfo"></p>
+    <div class="deck" id="e-deck"></div>
+    <div class="row"><button class="btn" id="e-clear">카드 모두 지우기</button><span class="hint" id="e-msg"></span></div>
+    <div class="streets" id="e-streets"></div>
+    <p class="hint">추천은 승률·포지션·드로우만 보고 단순화한 기준이에요. 승률은 상대가 처음 들고 시작한 범위 전체를 기준으로 해서, 상대가 큰 베팅으로 끝까지 따라온 경우에는 실제 승률이 이보다 낮을 수 있어요.</p>
+  </section>
+</div>
+
+<script>
+const RK="23456789TJQKA", SU="♠♥♦♣", RED=[false,true,true,false];
+const GR="AKQJT98765432"; // grid order
+const RV=Object.fromEntries([...RK].map((c,i)=>[c,i]));
+
+/* ---------- ranges (6-max open raise, simplified) ---------- */
+const POS={
+  UTG:{d:"가장 먼저 액션 · 뒤에 5명",r:"66+,ATs+,A5s-A4s,KTs+,QTs+,JTs,T9s,AJo+,KQo"},
+  HJ:{d:"하이잭 · 뒤에 4명",r:"55+,A9s+,A5s-A2s,K9s+,Q9s+,J9s+,T9s,98s,ATo+,KJo+"},
+  CO:{d:"컷오프 · 버튼 바로 앞",r:"33+,A2s+,K8s+,Q9s+,J9s+,T8s+,97s+,87s,76s,A9o+,KTo+,QTo+,JTo"},
+  BTN:{d:"버튼 · 포스트플랍 항상 마지막",r:"22+,A2s+,K2s+,Q5s+,J7s+,T7s+,96s+,86s+,75s+,65s,54s,A2o+,K9o+,Q9o+,J9o+,T9o,98o"},
+  SB:{d:"스몰 블라인드 · 빅 블라인드와 1:1",r:"22+,A2s+,K5s+,Q7s+,J8s+,T8s+,97s+,87s,76s,65s,A4o+,K9o+,QTo+,JTo"}
+};
+function lab(hi,lo,t){return hi===lo?RK[hi]+RK[lo]:RK[hi]+RK[lo]+t}
+function parseRange(str){
+  const set=new Set();
+  for(const tok of str.split(",")){
+    let m;
+    if(m=tok.match(/^(.)\1\+$/)){for(let r=RV[m[1]];r<=12;r++)set.add(lab(r,r))}
+    else if(m=tok.match(/^(.)(.)([so])\+$/)){const h=RV[m[1]];for(let k=RV[m[2]];k<h;k++)set.add(lab(h,k,m[3]))}
+    else if(m=tok.match(/^(.)(.)([so])-(.)(.)[so]$/)){const h=RV[m[1]],a=RV[m[2]],b=RV[m[5]];for(let k=Math.min(a,b);k<=Math.max(a,b);k++)set.add(lab(h,k,m[3]))}
+    else set.add(tok);
+  }
+  return set;
+}
+for(const p in POS){POS[p].set=parseRange(POS[p].r);let c=0;POS[p].set.forEach(h=>c+=h.length===2?6:h[2]==="s"?4:12);POS[p].pct=c/1326*100}
+
+function drawGrid(el,set,hl){
+  el.innerHTML="";
+  for(let i=0;i<13;i++)for(let j=0;j<13;j++){
+    const a=RV[GR[i]],b=RV[GR[j]];
+    const h=i===j?lab(a,a):i<j?lab(a,b,"s"):lab(b,a,"o");
+    const d=document.createElement("div");
+    d.className="cell"+(set.has(h)?" in":"")+(i===j?" pair":"")+(h===hl?" hl":"");
+    d.textContent=h;el.appendChild(d);
+  }
+}
+function cardEl(id,sm){const r=id>>2,s=id&3;const d=document.createElement("span");d.className="pc"+(RED[s]?" red":"")+(sm?" sm":"");d.innerHTML=`<b>${RK[r]}</b><i>${SU[s]}</i>`;return d}
+
+/* ---------- tabs ---------- */
+const tabs=[...document.querySelectorAll(".tabs button")];
+function showTab(t){tabs.forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===t));tabs.forEach(b=>document.getElementById("p-"+b.dataset.tab).hidden=b.dataset.tab!==t);if(t==="me")renderMe();try{localStorage.setItem("hd-tab",t)}catch(e){}}
+tabs.forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
+
+/* ---------- quiz ---------- */
+let st={n:0,ok:0,streak:0,best:0};
+try{const s=JSON.parse(localStorage.getItem("hd-stats")||"null");if(s)st=s}catch(e){}
+let Q=null,LOG=[],PLOG=[];const MINPRE=20,MINPOST=20;
+try{LOG=JSON.parse(localStorage.getItem("hd-log")||"[]")||[]}catch(e){}
+try{PLOG=JSON.parse(localStorage.getItem("hd-plog")||"[]")||[]}catch(e){}
+function saveStats(){try{localStorage.setItem("hd-stats",JSON.stringify(st));localStorage.setItem("hd-log",JSON.stringify(LOG));localStorage.setItem("hd-plog",JSON.stringify(PLOG))}catch(e){}}
+function renderProg(id,cnt,min,unit){
+  const el=document.getElementById(id);if(!el)return;const done=cnt>=min;
+  el.className="qprog"+(done?" done":"");
+  el.innerHTML=`<div class="row"><span>${done?"성향 분석 가능":"성향 분석까지"}</span><span class="mono"><b>${Math.min(cnt,min)}</b> / ${min} ${unit}${done&&cnt>min?` · 누적 ${cnt}`:""}</span></div><div class="prog"><div style="width:${Math.min(1,cnt/min)*100}%"></div></div>`+(done?`<span class="hint">‘내 성향’ 탭에서 결과를 확인하세요. 더 풀수록 정확해져요.</span>`:"");
+}
+function renderStats(){renderProg("q-prog",LOG.length,MINPRE,"핸드");renderProg("pf-qprog",PLOG.length,MINPOST,"문제");document.getElementById("s-acc").textContent=st.n?Math.round(st.ok/st.n*100)+"%":"–";document.getElementById("s-streak").textContent=st.streak;document.getElementById("s-best").textContent=st.best}
+function deal(){
+  const ps=Object.keys(POS);const pos=ps[Math.floor(Math.random()*ps.length)];
+  const a=Math.floor(Math.random()*52);let b;do b=Math.floor(Math.random()*52);while(b===a);
+  let ra=a>>2,rb=b>>2,c=[a,b];if(rb>ra){[ra,rb]=[rb,ra];c=[b,a]}
+  const h=ra===rb?lab(ra,ra):lab(ra,rb,(a&3)===(b&3)?"s":"o");
+  Q={pos,h,c,done:false};
+  document.getElementById("q-pos").textContent=pos;
+  document.getElementById("q-posdesc").textContent=POS[pos].d;
+  const cs=document.getElementById("q-cards");cs.innerHTML="";c.forEach(x=>cs.appendChild(cardEl(x)));
+  document.getElementById("q-result").hidden=true;
+  document.getElementById("q-raise").disabled=false;document.getElementById("q-fold").disabled=false;
+}
+function answer(raise){
+  if(!Q||Q.done)return;Q.done=true;
+  const inR=POS[Q.pos].set.has(Q.h),ok=raise===inR;
+  st.n++;if(ok){st.ok++;st.streak++;st.best=Math.max(st.best,st.streak)}else st.streak=0;
+  LOG.push({p:Q.pos,h:Q.h,i:inR?1:0,r:raise?1:0});if(LOG.length>400)LOG.shift();try{window.HoldemApp&&window.HoldemApp.quizAnswered()}catch(e){}
+  saveStats();renderStats();
+  const fb=document.getElementById("q-fb");
+  fb.className="fb "+(ok?"ok":"no");
+  fb.textContent=(ok?"정답이에요. ":"아쉬워요. ")+`${Q.h}는 ${Q.pos}에서 `+(inR?"오픈 레이즈 범위에 들어가요.":"폴드하는 핸드예요.");
+  document.getElementById("q-gridlabel").textContent=`${Q.pos} 오픈 범위 · 전체 핸드의 약 ${POS[Q.pos].pct.toFixed(0)}%`;
+  drawGrid(document.getElementById("q-grid"),POS[Q.pos].set,Q.h);
+  document.getElementById("q-result").hidden=false;
+  document.getElementById("q-raise").disabled=true;document.getElementById("q-fold").disabled=true;
+}
+document.getElementById("q-raise").onclick=()=>answer(true);
+document.getElementById("q-fold").onclick=()=>answer(false);
+document.getElementById("q-next").onclick=deal;
+document.addEventListener("keydown",e=>{
+  if(document.getElementById("p-quiz").hidden||e.target.matches("input,select"))return;
+  const k=e.key.toLowerCase();
+  if(k==="r")answer(true);else if(k==="f")answer(false);
+  else if(k===" "&&Q&&Q.done){e.preventDefault();deal()}
+});
+renderStats();deal();
+
+/* ---------- range tab ---------- */
+let rPos="UTG";const seg=document.getElementById("r-seg");
+Object.keys(POS).forEach(p=>{const b=document.createElement("button");b.textContent=p;b.dataset.p=p;b.onclick=()=>{rPos=p;renderRange()};seg.appendChild(b)});
+function renderRange(){[...seg.children].forEach(b=>b.setAttribute("aria-pressed",b.dataset.p===rPos));drawGrid(document.getElementById("r-grid"),POS[rPos].set);document.getElementById("r-pct").textContent=`${rPos}: 전체 핸드의 약 ${POS[rPos].pct.toFixed(1)}%`}
+renderRange();
+
+/* ---------- pot odds ---------- */
+const OUTS=[["플러시 드로우",9],["양방 스트레이트",8],["거트샷",4],["오버카드 2장",6],["플러시+양방",15],["셋 노리기(포켓페어)",2]];
+const chips=document.getElementById("o-chips");
+OUTS.forEach(([n,v])=>{const b=document.createElement("button");b.innerHTML=`${n}<b>${v}</b>`;b.onclick=()=>{document.getElementById("o-outs").value=v;calcOdds()};chips.appendChild(b)});
+function pct(x){return (x*100).toFixed(1)+"%"}
+function calcOdds(){
+  const pot=+document.getElementById("o-pot").value||0,call=+document.getElementById("o-call").value||0;
+  const outs=Math.max(0,Math.min(20,Math.floor(+document.getElementById("o-outs").value||0)));
+  const flop=document.getElementById("o-street").value==="flop";
+  const need=call>0?call/(pot+call):0;
+  const one=outs/(flop?47:46);
+  const two=1-((47-outs)/47)*((46-outs)/46);
+  const have=flop?two:one;
+  document.getElementById("o-need").textContent=call>0?pct(need):"–";
+  document.getElementById("o-ratio").textContent=call>0?`팟 ${pot} 에 ${call} 을 걸어 ${pot+call} 을 노림 (${(pot/call).toFixed(1)} : 1)`:"콜 금액을 넣으세요";
+  document.getElementById("o-havelabel").textContent=flop?"리버까지 완성 확률":"리버에 완성 확률";
+  document.getElementById("o-have").textContent=pct(have);
+  document.getElementById("o-rule").textContent=flop?`어림셈: ${outs}×4 ≈ ${outs*4}% · 턴 한 장만: ${pct(outs/47)}`:`어림셈: ${outs}×2 ≈ ${outs*2}%`;
+  const v=document.getElementById("o-verdict");
+  if(call<=0){v.className="verdict";v.textContent="";return}
+  if(flop){
+    const turnOnly=outs/47;
+    if(turnOnly>=need){v.className="verdict call";v.innerHTML=`콜이 이득이에요<small>턴 한 장만 봐도 ${pct(turnOnly)}로 필요 승률 ${pct(need)}보다 높아요.</small>`}
+    else if(two>=need){v.className="verdict call";v.innerHTML=`올인이면 콜, 아니면 애매해요<small>리버까지 공짜로 본다면 ${pct(two)}로 충분하지만, 턴에 또 베팅이 나오면 한 장 기준(${pct(turnOnly)})으로 다시 따져야 해요. 완성됐을 때 더 받아낼 돈(임플라이드 오즈)이 크면 콜 쪽으로 기울어요.</small>`}
+    else{v.className="verdict fold";v.innerHTML=`폴드가 기본이에요<small>완성 확률 ${pct(two)}가 필요 승률 ${pct(need)}보다 낮아요.</small>`}
+  }else{
+    if(one>=need){v.className="verdict call";v.innerHTML=`콜이 이득이에요<small>${pct(one)} ≥ 필요 승률 ${pct(need)}</small>`}
+    else{v.className="verdict fold";v.innerHTML=`폴드가 기본이에요<small>${pct(one)} &lt; 필요 승률 ${pct(need)}. 완성 시 상대에게서 ${Math.ceil(call/one-pot-call)} 이상 더 받아낼 수 있다면 콜도 가능해요.</small>`}
+  }
+}
+["o-pot","o-call","o-outs","o-street"].forEach(id=>document.getElementById(id).addEventListener("input",calcOdds));
+calcOdds();
+
+/* ---------- evaluator ---------- */
+function straightTop(m){const x=(m<<1)|((m>>12)&1);for(let t=12;t>=3;t--)if(((x>>(t-3))&31)===31)return t;return -1}
+function pk(cat,a){let v=cat;for(let i=0;i<5;i++)v=v*16+(a[i]===undefined?0:a[i]);return v}
+const rc=new Int8Array(13);
+function score(cs){
+  rc.fill(0);const sc=[0,0,0,0],sm=[0,0,0,0];let rm=0;
+  for(const c of cs){const r=c>>2,s=c&3;rc[r]++;sc[s]++;sm[s]|=1<<r;rm|=1<<r}
+  let fs=-1;
+  for(let s=0;s<4;s++)if(sc[s]>=5){fs=s;const t=straightTop(sm[s]);if(t>=0)return pk(8,[t])}
+  const q=[],t3=[],p2=[],s1=[];
+  for(let r=12;r>=0;r--){const n=rc[r];if(n===4)q.push(r);else if(n===3)t3.push(r);else if(n===2)p2.push(r);else if(n===1)s1.push(r)}
+  if(q.length){let k=-1;for(let r=12;r>=0;r--)if(r!==q[0]&&rc[r]){k=r;break}return pk(7,[q[0],k])}
+  if(t3.length&&(t3.length>1||p2.length)){return pk(6,[t3[0],Math.max(t3[1]??-1,p2[0]??-1)])}
+  if(fs>=0){const a=[];for(let r=12;r>=0&&a.length<5;r--)if(sm[fs]>>r&1)a.push(r);return pk(5,a)}
+  const st=straightTop(rm);if(st>=0)return pk(4,[st]);
+  if(t3.length)return pk(3,[t3[0],s1[0],s1[1]]);
+  if(p2.length>=2){const rest=[...p2.slice(2),...s1].sort((a,b)=>b-a);return pk(2,[p2[0],p2[1],rest[0]])}
+  if(p2.length===1)return pk(1,[p2[0],s1[0],s1[1],s1[2]]);
+  return pk(0,s1.slice(0,5));
+}
+
+/* ---------- equity + recommended action ---------- */
+const EPOS=["UTG","HJ","CO","BTN","SB","BB"];
+const ACT_ORDER={SB:0,BB:1,UTG:2,HJ:3,CO:4,BTN:5}; // 플랍 이후 행동 순서
+const BB_DEF=parseRange("22+,A2s+,K2s+,Q4s+,J6s+,T6s+,96s+,85s+,75s+,64s+,53s+,A2o+,K7o+,Q8o+,J8o+,T8o+,98o");
+const CATN=["하이카드","원 페어","투 페어","트리플","스트레이트","플러시","풀하우스","포카드","스트레이트 플러시"];
+const E={hero:[49,42],board:[43,26,4,37,3],my:"BTN",ops:["BB"],rng:"pos",active:{g:"hero",i:0}};
+function clsOf(a,b){let ra=a>>2,rb=b>>2;if(rb>ra){[ra,rb]=[rb,ra]}return ra===rb?lab(ra,ra):lab(ra,rb,(a&3)===(b&3)?"s":"o")}
+function rangeFor(p){if(E.rng==="any")return null;return p==="BB"?BB_DEF:POS[p].set}
+function catOf(sc){return Math.floor(sc/1048576)}
+function sortedOps(){return EPOS.filter(p=>E.ops.includes(p))}
+function renderPosBtns(){
+  const my=document.getElementById("e-mypos");my.innerHTML="";
+  EPOS.forEach(p=>{const b=document.createElement("button");b.textContent=p;b.setAttribute("aria-pressed",E.my===p);
+    b.onclick=()=>{E.my=p;E.ops=E.ops.filter(x=>x!==p);if(!E.ops.length)E.ops=[p==="BB"?"BTN":"BB"];renderEq()};my.appendChild(b)});
+  const op=document.getElementById("e-oppos");op.innerHTML="";
+  EPOS.forEach(p=>{const b=document.createElement("button");b.textContent=p;const on=E.ops.includes(p);b.setAttribute("aria-pressed",on);b.disabled=p===E.my;
+    b.onclick=()=>{if(on){if(E.ops.length>1)E.ops=E.ops.filter(x=>x!==p)}else E.ops=[...E.ops,p];renderEq()};op.appendChild(b)});
+}
+function renderSlots(){
+  const hb=document.getElementById("e-hero");hb.innerHTML="";
+  E.hero.forEach((c,i)=>hb.appendChild(slotBtn("hero",i,c)));
+  const bb=document.getElementById("e-board");bb.innerHTML="";
+  [["플랍",[0,1,2]],["턴",[3]],["리버",[4]]].forEach(([nm,idx])=>{
+    const g=document.createElement("div");g.className="grp";g.innerHTML=`<span>${nm}</span>`;const row=document.createElement("div");
+    idx.forEach(i=>row.appendChild(slotBtn("board",i,E.board[i])));g.appendChild(row);bb.appendChild(g);
+  });
+}
+function slotBtn(g,i,c){
+  const b=document.createElement("button");
+  b.className="slot"+(E.active.g===g&&E.active.i===i?" active":"");
+  b.setAttribute("aria-label",(g==="hero"?"내 카드 ":"보드 카드 ")+(i+1));
+  if(c!==null)b.appendChild(cardEl(c,true));
+  b.onclick=()=>{if(c!==null&&E.active.g===g&&E.active.i===i){E[g][i]=null;if(g==="board")for(let k=i+1;k<5;k++)E.board[k]=null}E.active={g,i};renderEq()};
+  return b;
+}
+function used(){return [...E.hero,...E.board].filter(x=>x!==null)}
+function renderDeck(){
+  const d=document.getElementById("e-deck");d.innerHTML="";const u=new Set(used());
+  for(let s=0;s<4;s++)for(let j=0;j<13;j++){
+    const r=12-j,id=r*4+s;const b=document.createElement("button");
+    b.className="dk"+(RED[s]?" red":"");b.innerHTML=RK[r]+"<br>"+SU[s];b.disabled=u.has(id);
+    b.onclick=()=>pick(id);d.appendChild(b);
+  }
+}
+function nextEmpty(){
+  const order=[["hero",0],["hero",1],["board",0],["board",1],["board",2],["board",3],["board",4]];
+  for(const [g,i] of order)if(E[g][i]===null)return {g,i};return E.active;
+}
+function pick(id){
+  const {g,i}=E.active;
+  if(g==="board"){const first=E.board.indexOf(null);if(first!==-1&&first<i){E.board[first]=id}else E.board[i]=id}else E[g][i]=id;
+  E.active=nextEmpty();renderEq();
+}
+document.querySelectorAll("#e-rng button").forEach(b=>b.onclick=()=>{E.rng=b.dataset.r;renderEq()});
+document.getElementById("e-clear").onclick=()=>{E.hero=[null,null];E.board=[null,null,null,null,null];E.active={g:"hero",i:0};renderEq()};
+
+function liveCombos(dead,rs){
+  const out=[];
+  for(let a=0;a<52;a++){if(dead.has(a))continue;for(let b=a+1;b<52;b++){if(dead.has(b))continue;if(!rs||rs.has(clsOf(a,b)))out.push([a,b])}}
+  return out;
+}
+// 상대 여러 명: 각자 자기 포지션 범위에서 무작위 핸드. 무승부는 나눠 가진 몫만큼 계산.
+function equity(hero,board,N){
+  const dead=new Set([...hero,...board]);
+  const lists=sortedOps().map(p=>liveCombos(dead,rangeFor(p)));
+  if(lists.some(l=>!l.length))return null;
+  const deck=[];for(let c=0;c<52;c++)if(!dead.has(c))deck.push(c);
+  const need=5-board.length,hv=[hero[0],hero[1],...board];let share=0,done=0;
+  for(let it=0;it<N;it++){
+    const taken=new Set(),hands=[];let ok=true;
+    for(const L of lists){
+      let h,t=0;do{h=L[(Math.random()*L.length)|0];t++}while((taken.has(h[0])||taken.has(h[1]))&&t<60);
+      if(taken.has(h[0])||taken.has(h[1])){ok=false;break}
+      taken.add(h[0]);taken.add(h[1]);hands.push(h);
+    }
+    if(!ok)continue;
+    const run=[];while(run.length<need){const c=deck[(Math.random()*deck.length)|0];if(!taken.has(c)&&!run.includes(c))run.push(c)}
+    const hs=score(hv.concat(run));let best=-1,cnt=0;
+    for(const h of hands){const s=score([h[0],h[1],...board,...run]);if(s>best){best=s;cnt=1}else if(s===best)cnt++}
+    if(hs>best)share+=1;else if(hs===best)share+=1/(cnt+1);
+    done++;
+  }
+  return done?{eq:share/done}:null;
+}
+function handDesc(hero,board){
+  const sc=score([...hero,...board]);const cat=catOf(sc);let name=CATN[cat];
+  if(cat===1){
+    const bR=board.map(c=>c>>2),h0=hero[0]>>2,h1=hero[1]>>2,top=Math.max(...bR);
+    const boardPaired=new Set(bR).size<bR.length;
+    if(h0===h1&&h0>top)name="오버페어";
+    else if(h0===h1)name="포켓 페어 (보드 아래)";
+    else{const pr=bR.includes(h0)?h0:bR.includes(h1)?h1:-1;
+      if(pr===-1&&boardPaired)name="보드 페어 (내 카드는 하이카드)";
+      else if(pr===top)name="탑 페어";
+      else name="중간·낮은 페어";}
+  }
+  return {cat,name};
+}
+function drawOuts(hero,board){
+  if(board.length>=5)return 0;
+  const cur=catOf(score([...hero,...board]));if(cur>=4)return 0;
+  const dead=new Set([...hero,...board]);let n=0;
+  for(let c=0;c<52;c++){if(dead.has(c))continue;if(catOf(score([...hero,...board,c]))>=4)n++}
+  return n;
+}
+const BETS=[["팟 1/3",1/3],["팟 1/2",1/2],["팟 2/3",2/3],["팟 크기",1]];
+function faceLine(eq,river,cat,n){
+  const r=eq*(n+1);
+  if(r>=1.36&&cat>=2)return "상대가 먼저 베팅하면 레이즈해서 팟을 키우세요.";
+  if(r>=1.36)return "상대가 먼저 베팅하면 콜하세요. 원 페어로 레이즈하면 더 강한 핸드만 남아요.";
+  let ok=null;for(const [nm,f] of BETS){const need=f/(1+2*f);if(eq>=need)ok=nm}
+  if(!ok)return "상대가 베팅하면 폴드가 기본이에요 (팟 1/3 베팅에도 승률 20%가 필요해요).";
+  let s=`상대가 ${ok} 이하로 베팅하면 콜해도 이득이에요`;
+  if(n>1)s+=". 단, 내 뒤에 아직 행동할 상대가 남아 있으면 레이즈를 맞을 수 있으니 한 단계 더 보수적으로 판단하세요";
+  else if(!river)s+=" (다음 카드에 또 베팅이 나올 수 있으니 한 번 더 확인하세요)";
+  return s+".";
+}
+// 기준: 공평 몫(1 ÷ 참가 인원) 대비 승률 비율 r. 헤즈업에서 r 1.36 = 승률 68%.
+function recommend(street,eq,ip,outs,desc,n){
+  const river=street==="리버",multi=n>1,fair=1/(n+1),r=eq/fair;
+  if(r>=1.36){
+    if(multi)return ["a",river?"밸류 베팅 (팟 2/3~3/4)":"밸류 베팅 (팟 2/3)",`${desc.name}로 공평 몫(${pct(fair)})보다 훨씬 앞서 있어요. 여러 명이 따라올 수 있으니 조금 크게 베팅해서 드로우들에게 값을 받으세요.`];
+    return ["a",river?"밸류 베팅 (팟 2/3)":"밸류 베팅 (팟 1/2~2/3)",`${desc.name}로 상대 범위의 대부분을 이기고 있어요. 더 약한 핸드에게서 돈을 받으세요.`];
+  }
+  if(r>=1.04){
+    if(multi)return ["p",ip?"작게 베팅 (팟 1/3) 또는 체크":"체크, 작은 베팅엔 콜",`공평 몫(${pct(fair)})보다 조금 높지만, 상대가 ${n}명이면 누군가 더 강한 핸드를 들고 있을 가능성이 커요. 팟을 작게 유지하세요.`];
+    if(river)return ip?["a","작게 밸류 베팅 (팟 1/3~1/2)","조금 앞서 있어요. 크게 걸면 더 강한 핸드만 콜하니 작게 거세요."]:["p","체크 후 상대 베팅에 콜","조금 앞서 있지만, 먼저 베팅하면 더 강한 핸드만 콜해요. 체크하고 상대의 블러프를 받아내세요."];
+    return ip?["a","작게 베팅 (팟 1/3)","조금 앞서 있어요. 작게 베팅해서 더 약한 핸드와 드로우에게서 값을 받으세요."]:["p","체크-콜","조금 앞서 있지만 상대보다 먼저 행동해서 불리해요. 팟을 작게 유지하세요."];
+  }
+  if(!river&&outs>=8&&r>=0.6){
+    if(multi)return ["p","체크-콜 (싸게 따라가기)",`완성 카드(아웃츠)가 ${outs}장이에요. 여러 명을 한 번에 폴드시키기는 어려우니 세미 블러프보다 싸게 따라가세요. 완성되면 따라온 사람이 많아 큰 팟을 이겨요.`];
+    return ip?["a","세미 블러프 베팅 (팟 1/2)",`완성 카드(아웃츠)가 ${outs}장이에요. 지금 베팅하면 상대가 폴드할 수도 있고, 콜해도 완성될 기회가 남아요.`]:["p","체크-콜 (베팅 크기 확인)",`완성 카드(아웃츠)가 ${outs}장이에요. 상대 베팅이 너무 크지 않으면 따라가며 완성을 노리세요.`];
+  }
+  if(r>=0.8){
+    if(multi)return ["p","체크, 베팅이 나오면 대부분 폴드",`공평 몫(${pct(fair)}) 근처예요. 상대가 ${n}명이면 이 정도 핸드는 자주 져요. 공짜로 볼 수 있을 때만 계속하세요.`];
+    if(river)return ip?["p","체크 (쇼다운)","이길 수도 질 수도 있는 핸드예요. 베팅하면 더 강한 핸드만 콜하니 체크로 무료로 결과를 보세요."]:["p","체크, 작은 베팅엔 콜","중간 정도 핸드예요. 상대 베팅이 작으면 콜, 크면 폴드를 고민하세요."];
+    return ip?["p","체크 (공짜 카드 보기)","중간 정도 핸드예요. 체크해서 팟을 작게 유지하고 다음 카드를 공짜로 보세요."]:["p","체크, 작은 베팅엔 콜","중간 정도 핸드예요. 상대 베팅이 작을 때만 따라가세요."];
+  }
+  if(multi)return ["f","체크 후 폴드",`여러 명을 상대로 대부분 지고 있어요. 여러 명 팟에서는 블러프도 거의 통하지 않아요.`];
+  if(river)return ip?["f","체크 포기 (블러프는 상대가 잘 폴드할 때만)","상대 범위에 대부분 지고 있어요. 상대가 폴드를 잘 하는 스타일일 때만 블러프를 고려하세요."]:["f","체크 후 폴드","상대 범위에 대부분 지고 있어요. 상대가 베팅하면 버리세요."];
+  return ["f",outs>=4?"체크, 작은 베팅에만 콜":"체크 후 폴드",outs>=4?`지고 있지만 완성 카드(아웃츠)가 ${outs}장 있어요. 아주 작은 베팅에만 따라가세요.`:"상대 범위에 대부분 지고 있고 역전할 카드도 적어요."];
+}
+function preflopRec(eq,n){
+  const h=clsOf(E.hero[0],E.hero[1]),r=eq*(n+1),ops=sortedOps().join(", ");
+  if(E.my==="BB"){
+    if(r>=1.1)return ["a","리레이즈 (3벳)",`${h}는 상대(${ops})가 플레이하는 범위보다 강해요.`];
+    if(r>=0.8)return ["p","콜",`${h}는 빅 블라인드에서 이미 1BB를 냈으니 싸게 따라가서 플랍을 볼 만해요.`+(n>1?` 여러 명이 들어오면 팟 대비 싸게 볼 수 있어요.`:"")];
+    return ["f","폴드",`${h}는 상대(${ops}) 범위에 많이 밀려요.`];
+  }
+  const inR=POS[E.my].set.has(h);
+  if(!inR)return ["f","폴드",`${h}는 ${E.my} 오픈 범위 밖이에요. (레인지 표 탭 참고)`];
+  if(n>1&&r<0.9)return ["p","오픈 레이즈 (여러 명이 콜하면 신중하게)",`${h}는 ${E.my} 오픈 범위 안이지만, ${n}명이 따라오면 공평 몫보다 승률이 낮아져요. 플랍 이후 크게 맞지 않으면 쉽게 포기하세요.`];
+  return ["a","오픈 레이즈",`${h}는 ${E.my} 오픈 범위 안에 있어요.`];
+}
+function heroPos(){
+  const me=ACT_ORDER[E.my],o=E.ops.map(p=>ACT_ORDER[p]);
+  if(o.every(x=>x<me))return "last";if(o.every(x=>x>me))return "first";return "mid";
+}
+let eqTimer=null;
+function renderEq(){
+  renderPosBtns();
+  document.querySelectorAll("#e-rng button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.r===E.rng));
+  const n=E.ops.length,hp=heroPos();
+  const posTxt=hp==="last"?(n>1?"<b>내가 마지막에</b> 행동해요 (가장 유리한 위치)":"<b>내가 나중에</b> 행동해요 (유리한 위치)"):hp==="first"?"<b>내가 먼저</b> 행동해요 (불리한 위치)":"<b>내가 중간에</b> 행동해요 (앞뒤로 상대가 있어 신중해야 해요)";
+  document.getElementById("e-posinfo").innerHTML=`나 <b>${E.my}</b> vs 상대 <b>${sortedOps().join(", ")}</b>${n>1?` (${n}명, 멀티웨이)`:""} → 플랍 이후 ${posTxt}.`;
+  renderSlots();renderDeck();
+  clearTimeout(eqTimer);eqTimer=setTimeout(computeEq,30);
+}
+function computeEq(){
+  const out=document.getElementById("e-streets"),msg=document.getElementById("e-msg");msg.textContent="";
+  if(E.hero.includes(null)){out.innerHTML="";msg.textContent="내 카드 두 장을 골라 주세요.";return}
+  const b=E.board,nb=b.indexOf(null)===-1?5:b.indexOf(null);
+  const n=E.ops.length,ip=heroPos()==="last",fair=1/(n+1);
+  const stages=[["프리플랍",0]];if(nb>=3)stages.push(["플랍",3]);if(nb>=4)stages.push(["턴",4]);if(nb>=5)stages.push(["리버",5]);
+  const N=n>=3?3500:n===2?5000:6000;
+  let html="";
+  for(const [nm,k] of stages){
+    const bd=b.slice(0,k);const r=equity(E.hero,bd,N);
+    if(!r){html+=`<div class="street"><b>${nm}</b><p class="why">상대 범위에 남은 핸드가 없어요.</p></div>`;continue}
+    let rec,info="",face="";
+    const who=n>1?`상대 ${n}명`:`상대 ${E.ops[0]}`;
+    if(k===0){rec=preflopRec(r.eq,n);info=`${who} ${E.rng==="pos"?"포지션 범위":"아무 두 장"} 상대 승률`+(n>1?` · 공평 몫 ${pct(fair)}`:"")}
+    else{const d=handDesc(E.hero,bd),outs=drawOuts(E.hero,bd);rec=recommend(nm,r.eq,ip,outs,d,n);
+      info=`내 핸드: ${d.name}`+(outs?` · 스트레이트/플러시 완성 카드 ${outs}장`:"")+(n>1?` · ${who} 기준 공평 몫 ${pct(fair)}`:"");face=faceLine(r.eq,nm==="리버",d.cat,n)}
+    const mini=bd.map(c=>{const s=cardEl(c,true);s.classList.add("xs");return s.outerHTML}).join("");
+    const fairMark=n>1?`<i class="fairmk" style="left:${fair*100}%"></i>`:"";
+    html+=`<div class="street"><div class="hd"><b>${nm}</b><span class="mini">${mini}</span><span class="eqv">${pct(r.eq)}</span></div>
+      <div class="eqbar"><div style="width:${r.eq*100}%"></div>${fairMark}</div>
+      <div class="info">${info}</div>
+      <div class="rec"><span class="pk ${rec[0]}">${rec[0]==="a"?"공격":rec[0]==="p"?"신중":"포기"}</span>${rec[1]}</div>
+      <p class="why">${rec[2]}</p>${face?`<p class="face">${face}</p>`:""}</div>`;
+  }
+  out.innerHTML=html;
+}
+renderEq();
+
+/* ---------- postflop quiz ---------- */
+const SUITS="shdc";
+const cid=s=>RV[s[0]]*4+SUITS.indexOf(s[1]);
+const PF=[
+{t:"컨티뉴에이션 벳",me:"BTN",op:["BB"],pot:"6.5BB",h:"Kh Qh",b:"As 7d 2c",l:[["프리플랍","me","2.5BB 오픈 레이즈"],["프리플랍","BB","콜"],["플랍","BB","체크"]],o:[["체크","p"],["1/3 팟 베팅","a"],["팟 베팅","a"]],k:1,w:"A-7-2 무지개 보드처럼 마른 에이스 보드는 프리플랍에 레이즈한 나(BTN)에게 유리해요. 상대(BB)는 에이스를 든 경우가 적어서 작은 베팅만으로도 자주 폴드시켜요. 크게 걸 필요는 없어요."},
+{t:"컨티뉴에이션 벳",me:"CO",op:["BB"],pot:"6.5BB",h:"Ac Kd",b:"9h 8h 7s",l:[["프리플랍","me","2.5BB 오픈 레이즈"],["프리플랍","BB","콜"],["플랍","BB","체크"]],o:[["체크","p"],["1/3 팟 베팅","a"],["3/4 팟 베팅","a"]],k:0,w:"9-8-7처럼 이어진 보드는 상대(BB)가 콜한 핸드(수딧 커넥터, 작은 페어)에 훨씬 잘 맞아요. 내 AK는 페어도 드로우도 없어서 베팅하면 체크레이즈를 맞기 쉬워요. 체크하고 턴을 공짜로 보세요."},
+{t:"밸류 베팅",me:"BTN",op:["BB"],pot:"6.5BB",h:"Ad Js",b:"Jh 6c 2d",l:[["프리플랍","me","2.5BB 오픈 레이즈"],["프리플랍","BB","콜"],["플랍","BB","체크"]],o:[["체크","p"],["1/2 팟 베팅","a"],["올인","a"]],k:1,w:"내 탑 페어 좋은 키커는 상대의 더 약한 J, 6 페어나 드로우에게서 돈을 받을 수 있어요. 체크하면 받을 돈을 놓치고, 올인하면 나보다 강한 핸드만 콜해요."},
+{t:"드로우와 팟 오즈",me:"BB",op:["BTN"],pot:"6BB",h:"9s 8s",b:"Ks 5s 2d",l:[["프리플랍","BTN","2.5BB 오픈 레이즈"],["프리플랍","me","콜"],["플랍","me","체크"],["플랍","BTN","2BB 베팅"]],o:[["폴드","f"],["콜","p"],["레이즈 7BB","a"]],k:1,w:"상대가 2BB를 베팅해서 팟은 8BB, 내가 콜할 금액은 2BB예요. 필요한 승률은 2 ÷ (8 + 2) = 20%인데, 내 플러시 드로우(아웃츠 9개)는 리버까지 약 35%예요. 확실한 콜이에요. 레이즈(세미 블러프)도 가능하지만 기본은 콜부터 익히세요."},
+{t:"드로우와 팟 오즈",me:"BB",op:["BTN"],pot:"6BB",h:"Jc Td",b:"Kd 9c 3h",l:[["프리플랍","BTN","2.5BB 오픈 레이즈"],["프리플랍","me","콜"],["플랍","me","체크"],["플랍","BTN","6BB 베팅 (팟 크기)"]],o:[["폴드","f"],["콜","p"],["레이즈","a"]],k:0,w:"내 핸드는 Q 한 장만 기다리는 거트샷이라 아웃츠 4개, 다음 카드에 맞을 확률 약 9%예요. 상대의 팟 크기 베팅에 콜하려면 33%가 필요해서 한참 모자라요."},
+{t:"밸류 베팅",me:"CO",op:["BB"],pot:"6.5BB",h:"6d 6c",b:"6h 7h 8c",l:[["프리플랍","me","2.5BB 오픈 레이즈"],["프리플랍","BB","콜"],["플랍","BB","체크"]],o:[["체크 (슬로우플레이)","p"],["1/3 팟 베팅","a"],["3/4 팟 베팅","a"]],k:2,w:"내 셋은 강하지만 이 보드에는 스트레이트·플러시 드로우가 많아요. 턴에 위험한 카드가 많으니 지금 크게 베팅해서 상대 드로우가 비싼 값을 치르게 하고 팟을 키우세요."},
+{t:"레인지 존중",me:"BB",op:["UTG"],pot:"14.5BB",h:"7s 6s",b:"Ad Kc 7h Qs",l:[["프리플랍","UTG","2.5BB 오픈 레이즈"],["프리플랍","me","콜"],["플랍","me","체크"],["플랍","UTG","4BB 베팅"],["플랍","me","콜"],["턴","me","체크"],["턴","UTG","10BB 베팅"]],o:[["폴드","f"],["콜","p"],["레이즈","a"]],k:0,w:"가장 타이트한 UTG가 A-K-Q 보드에서 두 번 연속 베팅하면 A나 K 이상일 가능성이 아주 높아요. 내 바텀 페어는 역전할 카드도 거의 없어서 폴드가 맞아요."},
+{t:"밸류 베팅",me:"BTN",op:["BB"],pot:"13.5BB",h:"Kd Qd",b:"Kc 9s 4d 2h 7c",l:[["프리플랍","me","2.5BB 오픈 레이즈"],["프리플랍","BB","콜"],["플랍","BB","체크"],["플랍","me","3.5BB 베팅"],["플랍","BB","콜"],["턴","BB","체크"],["턴","me","체크"],["리버","BB","체크"]],o:[["체크","p"],["1/2 팟 베팅","a"],["올인","a"]],k:1,w:"내가 턴에 체크해서 내 핸드가 약해 보이고, 상대는 약한 K나 9 페어로 충분히 콜해요. 리버도 무난한 카드가 떨어졌으니 중간 크기로 밸류를 받으세요."},
+{t:"상대 유형",me:"BTN",op:["BB"],note:"상대 정보: 페어만 있어도 끝까지 콜하는 스타일",pot:"12.5BB",h:"8h 7h",b:"Kh Qs 3h Tc 2d",l:[["프리플랍","me","2.5BB 오픈 레이즈"],["프리플랍","BB","콜"],["플랍","BB","체크"],["플랍","me","3BB 베팅"],["플랍","BB","콜"],["턴","BB","체크"],["턴","me","체크"],["리버","BB","체크"]],o:[["체크 (포기)","p"],["2/3 팟 블러프","a"]],k:0,w:"내 플러시 드로우는 실패했어요. 블러프는 상대가 폴드해야 성공하는데, 콜이 많은 상대는 페어만 있어도 콜해요. 이런 상대에게는 블러프를 줄이고 좋은 핸드로 크게 베팅하는 쪽이 이득이에요."},
+{t:"체크레이즈 대응",me:"CO",op:["BB"],pot:"6.5BB",h:"Kh Th",b:"Kc 8d 4s",l:[["프리플랍","me","2.5BB 오픈 레이즈"],["프리플랍","BB","콜"],["플랍","BB","체크"],["플랍","me","2BB 베팅"],["플랍","BB","7BB로 레이즈 (체크레이즈)"]],o:[["폴드","f"],["콜","p"],["리레이즈","a"]],k:1,w:"내 탑 페어는 상대의 체크레이즈 한 번에 버리기엔 너무 강해요. 상대에게는 드로우와 더 약한 K도 섞여 있어요. 하지만 리레이즈하면 나보다 강한 핸드만 남으니, 콜로 팟을 적당히 유지하세요."},
+{t:"밸류 베팅",me:"BB",op:["BTN"],pot:"6BB",h:"9c 8c",b:"9h 8d 2s",l:[["프리플랍","BTN","2.5BB 오픈 레이즈"],["프리플랍","me","콜"],["플랍","me","체크"],["플랍","BTN","3BB 베팅"]],o:[["폴드","f"],["콜","p"],["레이즈 10BB","a"]],k:2,w:"내 투 페어는 이 보드에서 아주 강하고, 상대의 오버페어나 9 페어가 돈을 넣어줄 수 있어요. 7, T, 6처럼 스트레이트를 만드는 카드가 많으니 지금 레이즈해서 팟을 키우세요."},
+{t:"컨티뉴에이션 벳",me:"UTG",op:["BB"],pot:"6.5BB",h:"Js Jd",b:"8c 5d 2h",l:[["프리플랍","me","2.5BB 오픈 레이즈"],["프리플랍","BB","콜 (나머지 폴드)"],["플랍","BB","체크"]],o:[["체크","p"],["1/2 팟 베팅","a"]],k:1,w:"내 오버페어는 이 보드에서 대부분 앞서 있어요. 상대의 더 낮은 페어와 오버카드에게서 밸류를 받고, 공짜 카드도 주지 마세요."},
+{t:"컨티뉴에이션 벳",me:"BTN",op:["BB"],pot:"6.5BB",h:"Ac 5d",b:"Kd Kc 4s",l:[["프리플랍","me","2.5BB 오픈 레이즈"],["프리플랍","BB","콜"],["플랍","BB","체크"]],o:[["체크","p"],["1/3 팟 베팅","a"],["팟 베팅","a"]],k:1,w:"K-K-4 같은 페어 보드는 상대(BB)가 맞기 어려워요. 작은 베팅 하나로 낮은 핸드를 폴드시킬 수 있어요. 크게 걸면 K를 가진 핸드만 남아요."},
+{t:"멀티웨이",me:"CO",op:["BTN","BB"],pot:"9BB",h:"Ks Js",b:"9d 5c 3h",l:[["프리플랍","me","2.5BB 오픈 레이즈"],["프리플랍","BTN","콜"],["프리플랍","BB","콜"],["플랍","BB","체크"]],after:"내 다음에 BTN이 액션해요",o:[["체크","p"],["1/2 팟 베팅","a"]],k:0,w:"상대가 둘이면 누군가 보드에 맞았을 가능성이 크게 올라가요. 페어도 드로우도 없는 내 K 하이는 3명 팟에서 블러프가 잘 통하지 않아요. 체크하세요."},
+{t:"리버 큰 베팅",me:"BTN",op:["BB"],pot:"28.5BB",h:"9s 9c",b:"Th 8c 3d 2s 5h",l:[["프리플랍","me","2.5BB 오픈 레이즈"],["프리플랍","BB","콜"],["플랍","BB","체크"],["플랍","me","3BB 베팅"],["플랍","BB","콜"],["턴","BB","체크"],["턴","me","8BB 베팅"],["턴","BB","콜"],["리버","BB","28BB 베팅 (팟 크기, 먼저 베팅)"]],o:[["폴드","f"],["콜","p"]],k:0,w:"계속 체크-콜만 하던 상대가 리버에 갑자기 팟 크기로 먼저 베팅하면, 낮은 스테이크에서는 대부분 강한 핸드예요. 내 99는 T 페어 이상에 모두 져요. 블러프가 적은 상대에게는 폴드가 이득이에요."},
+{t:"세미 블러프",me:"BTN",op:["BB"],pot:"6.5BB",h:"As 5s",b:"Ks 8s 3d",l:[["프리플랍","me","2.5BB 오픈 레이즈"],["프리플랍","BB","콜"],["플랍","BB","체크"]],o:[["체크","p"],["1/2 팟 베팅","a"]],k:1,w:"내 핸드는 넛 플러시 드로우에 A 오버카드까지 있어요. 베팅하면 상대가 바로 폴드할 수 있고, 콜을 받아도 승률이 40% 가까이 남아요. 이런 핸드는 적극적으로 베팅하세요."},
+{t:"팟 컨트롤",me:"BB",op:["BTN"],pot:"6BB",h:"Kc 9d",b:"Kh 7s 3d",l:[["프리플랍","BTN","2.5BB 오픈 레이즈"],["프리플랍","me","콜"],["플랍","me","체크"],["플랍","BTN","2BB 베팅"]],o:[["폴드","f"],["콜","p"],["레이즈 7BB","a"]],k:1,w:"내 탑 페어는 BTN의 넓은 범위 상대로 대부분 앞서 있어서 폴드할 이유가 없어요. 하지만 키커가 약해서 레이즈하면 더 약한 핸드는 폴드하고 강한 K만 남아요. 콜로 팟을 작게 유지하면서 상대의 블러프를 받아내세요."},
+{t:"드로우와 팟 오즈",me:"BB",op:["BTN"],pot:"10BB",h:"8h 7h",b:"6c 5d Ks 2h",l:[["프리플랍","BTN","2.5BB 오픈 레이즈"],["프리플랍","me","콜"],["플랍","me","체크"],["플랍","BTN","2BB 베팅"],["플랍","me","콜"],["턴","me","체크"],["턴","BTN","10BB 베팅 (팟 크기)"]],o:[["폴드","f"],["콜","p"],["레이즈","a"]],k:0,w:"턴에서는 카드가 리버 한 장만 남아요. 내 양방 스트레이트 드로우(아웃츠 8개)는 리버에 맞을 확률이 약 17%인데, 팟 크기 베팅에 콜하려면 33%가 필요해요. 플랍에서는 콜이 맞았지만 턴의 큰 베팅에는 폴드가 맞아요."},
+{t:"상대 유형",me:"BB",op:["BTN"],note:"상대 정보: 블러프를 자주 하는 공격적인 스타일",pot:"12BB",h:"Ad 8d",b:"As Jc 5h 9c 2s",l:[["프리플랍","BTN","2.5BB 오픈 레이즈"],["프리플랍","me","콜"],["플랍","me","체크"],["플랍","BTN","3BB 베팅"],["플랍","me","콜"],["턴","me","체크"],["턴","BTN","체크"],["리버","me","체크"],["리버","BTN","8BB 베팅"]],o:[["폴드","f"],["콜","p"],["레이즈","a"]],k:1,w:"내 A 페어는 키커가 약하지만, 블러프가 잦은 상대가 턴에 체크하고 리버에 베팅하는 건 실패한 드로우일 때도 많아요. 콜에 필요한 승률은 8 ÷ (20 + 8) ≈ 29%라서 콜이 이득이에요. 레이즈하면 더 강한 핸드만 콜해요."},
+{t:"밸류 베팅",me:"BTN",op:["BB"],pot:"12.5BB",h:"Qs Qh",b:"Qd 8c 3s 4h",l:[["프리플랍","me","2.5BB 오픈 레이즈"],["프리플랍","BB","콜"],["플랍","BB","체크"],["플랍","me","3BB 베팅"],["플랍","BB","콜"],["턴","BB","체크"]],o:[["체크","p"],["2/3 팟 베팅","a"]],k:1,w:"내 탑 셋은 거의 넛이에요. 상대는 플랍에서 8이나 약한 Q, 드로우로 콜했을 가능성이 높아요. 턴에 체크하면 리버에 받을 수 있는 돈이 줄어들어요. 계속 베팅해서 팟을 키우세요."}
+];
+let pfOrder=[],pfI=0,PQ=null;
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function pfDeal(){
+  if(pfI>=pfOrder.length){pfOrder=shuffle(PF.map((_,i)=>i));pfI=0}
+  const q=PF[pfOrder[pfI++]];PQ={q,done:false};
+  document.getElementById("pf-tag").textContent=q.t;
+  document.getElementById("pf-prog").textContent=`이번 세트 ${pfI}번째 / ${PF.length}문제`;
+  const who=w=>w==="me"?`<span class="who me">나 · ${q.me}</span>`:`<span class="who op">상대 · ${w}</span>`;
+  document.getElementById("pf-spot").innerHTML=who("me")+'<span class="vs">vs</span>'+q.op.map(who).join("")+`<span class="vs">· 스택 100BB</span>`;
+  document.getElementById("pf-pot").textContent=q.pot;
+  const nt=document.getElementById("pf-note");nt.hidden=!q.note;nt.textContent=q.note||"";
+  let prev="",li="";
+  for(const [stt,w,txt] of q.l){li+=`<li class="${w==="me"?"me":"op"}${stt!==prev&&prev?" newst":""}"><span class="st">${stt!==prev?stt:""}</span>${who(w)}<span class="txt">${txt}</span></li>`;prev=stt}
+  const curSt=q.b.split(" ").length===3?"플랍":q.b.split(" ").length===4?"턴":"리버";
+  li+=`<li class="now${curSt!==prev?" newst":""}"><span class="st">${curSt!==prev?curSt:""}</span>${who("me")}<span class="txt">지금 내 차례 — 어떻게 할까요?${q.after?` <span class="hint" style="font-weight:400">(${q.after})</span>`:""}</span></li>`;
+  document.getElementById("pf-line").innerHTML=li;
+  const he=document.getElementById("pf-hero");he.innerHTML="";q.h.split(" ").forEach(c=>he.appendChild(cardEl(cid(c),true)));
+  const bo=document.getElementById("pf-board");bo.innerHTML="";q.b.split(" ").forEach(c=>bo.appendChild(cardEl(cid(c),true)));
+  const op=document.getElementById("pf-opts");op.innerHTML="";
+  q.o.forEach(([txt,k],i)=>{const b=document.createElement("button");b.className="btn"+(k==="a"?" agg":k==="f"?" fld":"");b.textContent=txt;b.onclick=()=>pfAnswer(i);op.appendChild(b)});
+  document.getElementById("pf-result").hidden=true;
+}
+function pfAnswer(i){
+  if(!PQ||PQ.done)return;PQ.done=true;const q=PQ.q,ok=i===q.k;
+  [...document.getElementById("pf-opts").children].forEach((b,j)=>{b.disabled=true;if(j===q.k)b.classList.add("right");else if(j===i)b.classList.add("wrong")});
+  PLOG.push({id:PF.indexOf(q),t:q.t,c:q.o[i][1],k:q.o[q.k][1],ok:ok?1:0});if(PLOG.length>400)PLOG.shift();saveStats();renderStats();try{window.HoldemApp&&window.HoldemApp.quizAnswered()}catch(e){}
+  const fb=document.getElementById("pf-fb");fb.className="fb "+(ok?"ok":"no");
+  fb.innerHTML=(ok?"<b>정답이에요.</b> ":`<b>정답은 ‘${q.o[q.k][0]}’이에요.</b> `)+q.w;
+  document.getElementById("pf-result").hidden=false;
+}
+document.getElementById("pf-next").onclick=pfDeal;
+pfDeal();renderStats();
+
+/* ---------- profile ---------- */
+function hcat(h){
+  if(h.length===2)return RV[h[0]]<=4?"작은 페어(22~66)":"중간 이상 페어";
+  const hi=RV[h[0]],lo=RV[h[1]],s=h[2]==="s";
+  if(hi===12)return s?"수딧 에이스(A2s~AKs)":"오프수트 에이스";
+  if(lo>=8)return s?"수딧 브로드웨이":"오프수트 브로드웨이";
+  if(s&&hi-lo<=3)return "수딧 커넥터·갭퍼";
+  return s?"기타 수딧":"기타 오프수트";
+}
+
+function esc(s){return String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}
+function renderMe(){
+  const box=document.getElementById("me-body");
+  const n=LOG.length,m=PLOG.length;
+  const preOk=n>=MINPRE,postOk=m>=MINPOST;
+  let html="";
+  if(!preOk||!postOk){
+    html+=`<div class="sec" style="margin-bottom:16px"><h3>분석에 필요한 기록</h3>
+      <div><div class="row" style="justify-content:space-between"><span>오픈 퀴즈</span><span class="mono">${Math.min(n,MINPRE)} / ${MINPRE}</span></div><div class="prog"><div style="width:${Math.min(1,n/MINPRE)*100}%"></div></div></div>
+      <div><div class="row" style="justify-content:space-between"><span>플랍 이후 퀴즈</span><span class="mono">${Math.min(m,MINPOST)} / ${MINPOST}</span></div><div class="prog"><div style="width:${Math.min(1,m/MINPOST)*100}%"></div></div></div>
+      <p class="hint">기록이 채워진 쪽부터 분석해 드려요. 성향 분석은 이 업데이트 이후에 푼 문제부터 집계돼요.</p></div>`;
+  }
+  // preflop
+  let loose=0,tight=0,pre={pos:{},cat:{}};
+  for(const e of LOG){
+    const P=pre.pos[e.p]||(pre.pos[e.p]={n:0,ok:0,r:0,i:0,l:0,t:0});P.n++;P.r+=e.r;P.i+=e.i;
+    if(e.r===e.i)P.ok++;else if(e.r){loose++;P.l++}else{tight++;P.t++}
+    if(e.r!==e.i){const c=hcat(e.h);const C=pre.cat[c]||(pre.cat[c]={l:0,t:0,ex:[]});e.r?C.l++:C.t++;if(C.ex.length<3&&!C.ex.includes(e.h))C.ex.push(e.h)}
+  }
+  // postflop
+  let over=0,pass=0,stat=0,fold=0,size=0,pt={};
+  for(const e of PLOG){
+    const T=pt[e.t]||(pt[e.t]={n:0,ok:0});T.n++;T.ok+=e.ok;
+    if(e.ok)continue;
+    if(e.c==="a"&&e.k==="a")size++;
+    else if(e.c==="a")over++;
+    else if(e.c==="p"&&e.k==="a")pass++;
+    else if(e.c==="p"&&e.k==="f")stat++;
+    else if(e.c==="f")fold++;
+  }
+  // style
+  const preAcc=n?LOG.filter(e=>e.r===e.i).length/n:0;
+  let pStyle=null,pAxis=.5;
+  if(preOk){pAxis=.5+Math.max(-.45,Math.min(.45,(loose-tight)/Math.max(6,n)*3));pStyle=loose>=Math.max(3,tight*1.8)?"루즈":tight>=Math.max(3,loose*1.8)?"타이트":"균형"}
+  let qStyle=null,qAxis=.5;
+  const aggErr=over,pasErr=pass+fold;
+  if(postOk){qAxis=.5+Math.max(-.45,Math.min(.45,(aggErr-pasErr)/Math.max(4,m)*2.5));qStyle=aggErr>=Math.max(2,pasErr*1.8)?"공격적":pasErr>=Math.max(2,aggErr*1.8)?"패시브":"균형"}
+  const ARCH={
+    "루즈-패시브":["콜링 스테이션형","많은 핸드로 들어가서 소극적으로 플레이해요. 홀덤에서 돈을 가장 많이 잃는 조합이라 우선순위 1번으로 고쳐야 해요."],
+    "루즈-공격적":["매니악형","많은 핸드로 공격적으로 플레이해요. 테이블을 흔들 수는 있지만, 범위를 좁히지 않으면 분산이 너무 커져요."],
+    "타이트-패시브":["바위(Rock)형","좋은 핸드만 고르는 건 잘하지만 돈을 충분히 뽑지 못해요. 상대가 쉽게 읽고 피해 가요."],
+    "타이트-공격적":["TAG형 (지향점)","적은 핸드로 공격적으로 플레이하는, 입문~중급에서 가장 이기기 쉬운 스타일이에요. 세부 실수만 다듬으면 돼요."],
+  };
+  if(preOk||postOk){
+    let name,desc;
+    const key=`${pStyle}-${qStyle}`;
+    if(ARCH[key]){[name,desc]=ARCH[key]}
+    else if(pStyle&&qStyle){const a=pStyle==="균형"?"":pStyle,b=qStyle==="균형"?"":qStyle;
+      name=a||b?`${[a,b].filter(Boolean).join(" · ")} 성향`:"균형형";
+      desc=a||b?`${a?`프리플랍은 ${a}한 편이고`:"프리플랍 선택은 균형 잡혀 있고"}, ${b?`플랍 이후에는 ${b}인 편이에요.`:"플랍 이후 판단은 균형 잡혀 있어요."}`:"한쪽으로 치우친 실수가 적어요. 아래 세부 약점을 다듬으세요."}
+    else if(pStyle){name=pStyle==="균형"?"프리플랍 균형형":`프리플랍 ${pStyle}형`;desc="플랍 이후 퀴즈를 더 풀면 전체 스타일을 진단할 수 있어요."}
+    else{name=qStyle==="균형"?"포스트플랍 균형형":`포스트플랍 ${qStyle}형`;desc="오픈 퀴즈를 더 풀면 전체 스타일을 진단할 수 있어요."}
+    html+=`<div class="profile"><span class="label">내 플레이 스타일</span><div class="name">${name}</div><p>${desc}</p></div>`;
+    html+=`<div class="axes" style="margin-top:16px">`;
+    if(preOk)html+=`<div class="axis"><div class="lbls"><span>너무 타이트</span><span>프리플랍 핸드 선택</span><span>너무 루즈</span></div><div class="track"><div class="mid"></div><div class="dot" style="left:${pAxis*100}%"></div></div></div>`;
+    if(postOk)html+=`<div class="axis"><div class="lbls"><span>너무 패시브</span><span>플랍 이후 공격성</span><span>너무 공격적</span></div><div class="track"><div class="mid"></div><div class="dot" style="left:${qAxis*100}%"></div></div></div>`;
+    html+=`</div>`;
+  }
+  // advice
+  const adv=[];
+  if(preOk){
+    const cats=Object.entries(pre.cat).sort((a,b)=>(b[1].l+b[1].t)-(a[1].l+a[1].t));
+    const lc=cats.filter(c=>c[1].l>=c[1].t&&c[1].l>0).slice(0,2),tc=cats.filter(c=>c[1].t>c[1].l).slice(0,2);
+    if(loose>=3&&loose>=tight)adv.push({w:loose*1.2,t:"범위 밖 핸드로 레이즈하고 있어요",b:`오픈 범위에 없는 핸드로 레이즈한 실수가 ${loose}번이에요.`+(lc.length?` 주로 ${lc.map(c=>`${c[0]}(${c[1].ex.join(", ")})`).join(", ")}에서 나왔어요.`:""),d:"‘좋아 보이는 핸드’가 아니라 ‘이 포지션 표에 있는 핸드’만 오픈하세요. 특히 앞 포지션에서는 오프수트 핸드를 거의 버린다고 생각하면 돼요."});
+    if(tight>=3&&tight>loose*0.6)adv.push({w:tight,t:"이길 수 있는 핸드를 버리고 있어요",b:`범위 안의 핸드를 폴드한 실수가 ${tight}번이에요.`+(tc.length?` 주로 ${tc.map(c=>`${c[0]}(${c[1].ex.join(", ")})`).join(", ")}에서 나왔어요.`:""),d:"버튼·컷오프에서는 수딧 에이스, 작은 페어, 수딧 커넥터도 충분히 오픈할 가치가 있어요. 레인지 표 탭에서 BTN과 CO를 다시 보세요."});
+    const worst=Object.entries(pre.pos).filter(([,P])=>P.n>=4).map(([p,P])=>[p,P.ok/P.n,P]).sort((a,b)=>a[1]-b[1])[0];
+    if(worst&&worst[1]<.85)adv.push({w:(1-worst[1])*8,t:`${worst[0]}에서 판단이 가장 흔들려요`,b:`${worst[0]} 정답률 ${Math.round(worst[1]*100)}%. 루즈 실수 ${worst[2].l}번, 타이트 실수 ${worst[2].t}번이에요.`,d:`레인지 표 탭에서 ${worst[0]} 범위를 외운 뒤, 경계에 있는 핸드(가장 낮은 수딧·오프수트 키커)를 집중해서 확인하세요.`});
+  }
+  if(postOk){
+    if(stat>=2)adv.push({w:stat*1.6,t:"버려야 할 때 콜하고 있어요",b:`폴드가 정답인 상황에서 콜한 실수가 ${stat}번이에요. ‘혹시 블러프일까’ 하는 콜은 낮은 스테이크에서 가장 큰 손실 원인이에요.`,d:"콜하기 전에 팟 오즈 탭으로 필요 승률을 확인하고, 타이트한 상대의 큰 베팅이나 리버 올인은 강한 핸드로 읽으세요."});
+    if(pass>=2)adv.push({w:pass*1.4,t:"베팅해야 할 때 체크·콜만 하고 있어요",b:`베팅이나 레이즈가 정답인 상황에서 소극적으로 플레이한 실수가 ${pass}번이에요. 강한 핸드로 돈을 덜 받고, 드로우에게 공짜 카드를 주게 돼요.`,d:"탑 페어 이상이면 ‘더 약한 핸드가 콜해 줄까?’를 먼저 물어보세요. 답이 ‘예’면 베팅이에요."});
+    if(over>=2)adv.push({w:over*1.3,t:"체크해야 할 때 베팅하고 있어요",b:`체크·폴드가 정답인 상황에서 베팅한 실수가 ${over}번이에요. 상대 레인지에 잘 맞는 보드나 여러 명 팟에서 블러프하면 손실이 커요.`,d:"베팅 전에 ‘이 보드는 누구에게 유리한가’와 ‘상대가 폴드할 이유가 있나’를 확인하세요. 콜이 많은 상대에게는 블러프를 줄이세요."});
+    if(fold>=2)adv.push({w:fold*1.2,t:"너무 쉽게 폴드하고 있어요",b:`콜이나 레이즈가 정답인 상황에서 폴드한 실수가 ${fold}번이에요. 좋은 드로우나 탑 페어를 쉽게 버리면 상대 블러프가 모두 성공해요.`,d:"팟 오즈 탭으로 드로우 확률과 필요 승률을 비교하는 연습을 하세요. 작은 베팅일수록 필요 승률이 낮아요."});
+    if(size>=2)adv.push({w:size,t:"베팅 크기 선택을 다듬으세요",b:`베팅 방향은 맞았지만 크기가 틀린 경우가 ${size}번이에요.`,d:"마른 보드는 작게(1/3 팟), 드로우가 많은 보드나 강한 밸류는 크게(2/3~3/4 팟) 베팅하는 게 기본이에요."});
+    const wt=Object.entries(pt).filter(([,T])=>T.n>=2&&T.ok/T.n<.6).sort((a,b)=>a[1].ok/a[1].n-b[1].ok/b[1].n)[0];
+    if(wt)adv.push({w:(1-wt[1].ok/wt[1].n)*4,t:`‘${wt[0]}’ 상황이 약해요`,b:`이 유형 정답률 ${Math.round(wt[1].ok/wt[1].n*100)}% (${wt[1].ok}/${wt[1].n}).`,d:"플랍 이후 퀴즈에서 이 태그가 나올 때 해설을 끝까지 읽고, 실제 게임에서 같은 상황이 오면 메모해 두세요."});
+  }
+  adv.sort((a,b)=>b.w-a.w);
+  if(preOk||postOk){
+    html+=`<div class="sec" style="margin-top:20px"><h3>고쳐야 할 점 (중요한 순서)</h3>`;
+    if(adv.length)html+=`<ol class="advice">${adv.slice(0,4).map(a=>`<li><div><b>${esc(a.t)}</b><p>${esc(a.b)}</p><p class="do">→ ${esc(a.d)}</p></div></li>`).join("")}</ol>`;
+    else html+=`<p class="hint">한쪽으로 치우친 실수가 거의 없어요. 다음 단계로 9인 테이블 레인지나 3벳 상황을 연습해 보세요.</p>`;
+    html+=`</div>`;
+  }
+  if(preOk){
+    const order=["UTG","HJ","CO","BTN","SB"];
+    html+=`<div class="sec" style="margin-top:20px"><h3>포지션별 오픈 기록 <span class="hint mono" style="font-weight:400">· 최근 ${n}핸드, 정답률 ${Math.round(preAcc*100)}%</span></h3><div class="tblwrap"><table class="pt"><thead><tr><th>포지션</th><th>문제</th><th>정답률</th><th>내 오픈 비율</th><th>정답 오픈 비율</th><th>경향</th></tr></thead><tbody>`;
+    for(const p of order){const P=pre.pos[p];if(!P){html+=`<tr><td>${p}</td><td class="mono">0</td><td>–</td><td>–</td><td>–</td><td></td></tr>`;continue}
+      const tag=P.l>P.t&&P.l>=2?'<span class="pill l">루즈</span>':P.t>P.l&&P.t>=2?'<span class="pill t">타이트</span>':'<span class="pill g">양호</span>';
+      html+=`<tr><td><b>${p}</b></td><td class="mono">${P.n}</td><td class="mono">${Math.round(P.ok/P.n*100)}%</td><td class="mono">${Math.round(P.r/P.n*100)}%</td><td class="mono">${Math.round(P.i/P.n*100)}%</td><td>${tag}</td></tr>`}
+    html+=`</tbody></table></div></div>`;
+  }
+  if(postOk){
+    html+=`<div class="sec" style="margin-top:20px"><h3>플랍 이후 유형별 정답률 <span class="hint mono" style="font-weight:400">· ${m}문제</span></h3><div class="tblwrap"><table class="pt"><thead><tr><th>상황 유형</th><th>문제</th><th>정답률</th></tr></thead><tbody>`;
+    for(const [t,T] of Object.entries(pt).sort((a,b)=>a[1].ok/a[1].n-b[1].ok/b[1].n))html+=`<tr><td>${esc(t)}</td><td class="mono">${T.n}</td><td class="mono">${Math.round(T.ok/T.n*100)}%</td></tr>`;
+    html+=`</tbody></table></div></div>`;
+  }
+  box.innerHTML=html;
+}
+let resetArm=false;
+document.getElementById("me-reset").onclick=()=>{
+  const msg=document.getElementById("me-resetmsg");
+  if(!resetArm){resetArm=true;msg.textContent="한 번 더 누르면 모든 퀴즈 기록이 지워져요.";setTimeout(()=>{resetArm=false;msg.textContent=""},4000);return}
+  resetArm=false;LOG=[];PLOG=[];st={n:0,ok:0,streak:0,best:0};saveStats();renderStats();renderMe();msg.textContent="기록을 지웠어요.";
+};
+try{const t=localStorage.getItem("hd-tab");if(t&&document.getElementById("p-"+t))showTab(t)}catch(e){}
+</script>
+
+</body>
+</html>
